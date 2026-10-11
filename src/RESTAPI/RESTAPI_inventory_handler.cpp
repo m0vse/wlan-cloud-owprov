@@ -105,6 +105,10 @@ namespace OpenWifi {
 						   fmt::format("{}: Configuration is bad.", Existing.serialNumber));
 				Results.errorCode = 1;
 			}
+            // A push-only actor may request application of the stored config
+            // without gaining the independently controlled configuration read.
+            if (RestrictedAccess() && !UserAccess::Check(AccessSubject(), "inventory", SerialNumber,
+                    "configuration.read").allowed) Results.appliedConfiguration.clear();
 			Results.to_json(Answer);
 			return ReturnObject(Answer);
 		} else if (GetBoolParameter("resolveConfig", false)) {
