@@ -9,10 +9,12 @@
 #include "RESTAPI_entity_list_handler.h"
 #include "RESTAPI_db_helpers.h"
 #include "StorageService.h"
+#include "ScopedRead.h"
 
 namespace OpenWifi {
 
 	void RESTAPI_entity_list_handler::DoGet() {
+        if (ScopedReadList<EntityDB>(DB_, *this, "entity", "entities")) return;
 		if (!QB_.Select.empty()) {
 			return ReturnRecordList<decltype(DB_), ProvObjects::Entity>("entities", DB_, *this);
 		} else if (QB_.CountOnly) {

@@ -12,6 +12,8 @@
 #include "RESTObjects/RESTAPI_ProvObjects.h"
 #include "StorageService.h"
 #include "framework/ConfigurationValidator.h"
+#include "framework/UserAccessSecrets.h"
+#include "UserAccess.h"
 
 namespace OpenWifi {
 
@@ -178,6 +180,43 @@ namespace OpenWifi {
 		if (UUID.empty() || !DB_.GetRecord("id", UUID, Existing)) {
 			return NotFound();
 		}
+        const auto Original = Existing;
+
+        if (RestrictedAccess()) {
+            if (!ParsedBody_) return BadRequest(RESTAPI::Errors::InvalidJSONDocument);
+            if (!Existing.subscriber.empty()) return UnAuthorized(RESTAPI::Errors::ACCESS_DENIED);
+            // Ownership, usage and foreign references cannot be moved through
+            // configuration editing. Creation and deletion use separate grants.
+            for (auto it = ParsedBody_->begin(); it != ParsedBody_->end(); ++it) {
+                if (it->first != "name" && it->first != "description" && it->first != "configuration" &&
+                    it->first != "notes" && it->first != "deviceTypes")
+                    return UnAuthorized(RESTAPI::Errors::ACCESS_DENIED);
+            }
+            const auto scope = UserAccess::ResolveOwner(Existing.entity, Existing.venue);
+            if (!UserAccess::AllowsUser(AccessSubject(), scope, "configuration.write"))
+                return UnAuthorized(RESTAPI::Errors::ACCESS_DENIED);
+            // Shared configuration must not let a site editor alter another
+            // site's future resolved configuration through an existing link.
+            for (const auto &usage : Existing.inUse) {
+                const auto separator = usage.find(':');
+                if (separator == std::string::npos) return UnAuthorized(RESTAPI::Errors::ACCESS_DENIED);
+                const auto kind = usage.substr(0, separator);
+                const auto id = usage.substr(separator + 1);
+                UserAccess::Resource target;
+                if (kind == "ent" || kind == "ven")
+                    target = UserAccess::ResolveStoredScope({kind == "ent" ? "entity" : "venue", id});
+                else if (kind == "inv") {
+                    ProvObjects::InventoryTag inventory;
+                    if (StorageService()->InventoryDB().GetRecord("id", id, inventory))
+                        target = UserAccess::ResolveStoredDevice(inventory.serialNumber);
+                }
+                if (!UserAccess::AllowsUser(AccessSubject(), target, "configuration.write"))
+                    return UnAuthorized(RESTAPI::Errors::ACCESS_DENIED);
+            }
+            Poco::JSON::Object original; Existing.to_json(original);
+            if (!UserAccess::PreserveRedacted(ParsedBody_, original))
+                return BadRequest(RESTAPI::Errors::InvalidJSONDocument);
+        }
 
 		ProvObjects::DeviceConfiguration NewObject;
 		const auto &RawObject = ParsedBody_;
@@ -246,7 +285,7 @@ namespace OpenWifi {
 		if (RawObject->has("deviceRules"))
 			Existing.deviceRules = NewObject.deviceRules;
 
-		if (DB_.UpdateRecord("id", UUID, Existing)) {
+		if (RestrictedAccess() ? DB_.UpdateRecordIfUnchanged(Original, Existing) : DB_.UpdateRecord("id", UUID, Existing)) {
 			ManageMembership(StorageService()->VariablesDB(),
 							 &ProvObjects::VariableBlock::configurations, FromVariables,
 							 ToVariables, Existing.info.id);

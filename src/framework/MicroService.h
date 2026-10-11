@@ -7,6 +7,7 @@
 //
 
 #pragma once
+#include <optional>
 
 #include <array>
 #include <ctime>

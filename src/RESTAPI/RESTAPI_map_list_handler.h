@@ -9,6 +9,7 @@ namespace OpenWifi {
 
 	class RESTAPI_map_list_handler : public RESTAPIHandler {
 	  public:
+        bool SupportsScopedCollection() const final { return true; }
 		RESTAPI_map_list_handler(const RESTAPIHandler::BindingMap &bindings, Poco::Logger &L,
 								 RESTAPI_GenericServerAccounting &Server, uint64_t TransactionId,
 								 bool Internal)

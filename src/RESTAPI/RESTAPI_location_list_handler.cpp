@@ -3,6 +3,7 @@
 //
 
 #include "RESTAPI_location_list_handler.h"
+#include "ScopedRead.h"
 
 #include "RESTAPI/RESTAPI_db_helpers.h"
 #include "RESTObjects/RESTAPI_ProvObjects.h"
@@ -11,6 +12,7 @@
 namespace OpenWifi {
 
 	void RESTAPI_location_list_handler::DoGet() {
+        if (ScopedReadList<LocationDB>(DB_, *this, "location", "locations")) return;
 		return ListHandler<LocationDB>("locations", DB_, *this);
 	}
 } // namespace OpenWifi

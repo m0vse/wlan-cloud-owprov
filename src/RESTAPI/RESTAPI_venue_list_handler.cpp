@@ -5,9 +5,11 @@
 #include "RESTAPI_venue_list_handler.h"
 #include "RESTAPI/RESTAPI_db_helpers.h"
 #include "StorageService.h"
+#include "ScopedRead.h"
 
 namespace OpenWifi {
 	void RESTAPI_venue_list_handler::DoGet() {
+        if (ScopedReadList<VenueDB>(DB_, *this, "venue", "venues")) return;
         auto RRMvendor = GetParameter("RRMvendor","");
         if(RRMvendor.empty()) {
             return ListHandler<VenueDB>("venues", DB_, *this);

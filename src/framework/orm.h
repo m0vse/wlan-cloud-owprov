@@ -572,6 +572,26 @@ namespace ORM {
 			return false;
 		}
 
+        // Scoped writes must not overwrite ownership or memberships changed
+        // concurrently by an administrator after the authorization check.
+        bool UpdateRecordIfUnchanged(const RecordType &Expected, const RecordType &Updated) {
+            try {
+                Poco::Data::Session session = Pool_.get();
+                Poco::Data::Statement update(session);
+                RecordTuple previous, next;
+                Convert(Expected, previous); Convert(Updated, next);
+                auto condition = UpdateFields_;
+                for (std::size_t position = 0; (position = condition.find(',', position)) != std::string::npos;) {
+                    condition.replace(position, 1, " AND "); position += 5;
+                }
+                update << ConvertParams("update " + TableName_ + " set " + UpdateFields_ + " where " + condition),
+                    Poco::Data::Keywords::use(next), Poco::Data::Keywords::use(previous);
+                if (update.execute() != 1) return false;
+                if (Cache_) Cache_->UpdateCache(Updated);
+                return true;
+            } catch (const Poco::Exception &error) { Logger_.log(error); }
+            return false;
+        }
 		template <typename T>
 		bool UpdateRecord(field_name_t FieldName, const T &Value, const RecordType &R) {
 			try {

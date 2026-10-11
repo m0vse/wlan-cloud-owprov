@@ -152,6 +152,9 @@ add_executable(owprov
         src/storage/storage_overrides.cpp src/storage/storage_overrides.h
 
         src/RESTAPI/RESTAPI_entity_handler.cpp src/RESTAPI/RESTAPI_entity_handler.h
+        src/RESTAPI/RESTAPI_access_check_handler.cpp src/RESTAPI/RESTAPI_access_check_handler.h
+        src/UserAccess.h src/framework/UserAccessPolicy.h src/framework/UserAccessPolicyJSON.h
+        src/framework/UserAccessResolver.h
         src/RESTAPI/RESTAPI_contact_handler.cpp src/RESTAPI/RESTAPI_contact_handler.h
         src/RESTAPI/RESTAPI_location_handler.cpp src/RESTAPI/RESTAPI_location_handler.h
         src/RESTAPI/RESTAPI_venue_handler.cpp src/RESTAPI/RESTAPI_venue_handler.h
@@ -242,3 +245,8 @@ target_link_libraries(owprov PUBLIC
         CppKafka::cppkafka
         resolv
         fmt::fmt)
+
+target_sources(owprov PRIVATE src/framework/UserAccessClient.cpp)
+target_sources(owprov PRIVATE src/RESTAPI/RESTAPI_access_check_handler.cpp)
+target_link_libraries(owprov PUBLIC nlohmann_json::nlohmann_json)
+target_compile_definitions(owprov PRIVATE OPENWIFI_ACCESS_SERVICE="owprov")

@@ -9,6 +9,9 @@
 namespace OpenWifi {
 	class RESTAPI_signup_handler : public RESTAPIHandler {
 	  public:
+        bool RequiresAuthentication() const final {
+            return !Request || Request->getMethod() != Poco::Net::HTTPRequest::HTTP_POST;
+        }
 		RESTAPI_signup_handler(const RESTAPIHandler::BindingMap &bindings, Poco::Logger &L,
 							   RESTAPI_GenericServerAccounting &Server, uint64_t TransactionId,
 							   bool Internal)

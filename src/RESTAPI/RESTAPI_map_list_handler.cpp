@@ -3,12 +3,14 @@
 //
 
 #include "RESTAPI_map_list_handler.h"
+#include "ScopedRead.h"
 #include "RESTAPI/RESTAPI_db_helpers.h"
 #include "RESTObjects/RESTAPI_ProvObjects.h"
 #include "StorageService.h"
 
 namespace OpenWifi {
 	void RESTAPI_map_list_handler::DoGet() {
+        if (ScopedReadList<MapDB>(DB_, *this, "map", "list")) return;
 		const char *BlockName{"list"};
 		if (GetBoolParameter("myMaps", false)) {
 			auto where = DB_.OP("creator", ORM::EQ, UserInfo_.userinfo.id);

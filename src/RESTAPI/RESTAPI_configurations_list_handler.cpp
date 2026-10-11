@@ -7,9 +7,11 @@
 #include "RESTAPI_db_helpers.h"
 #include "RESTObjects/RESTAPI_ProvObjects.h"
 #include "StorageService.h"
+#include "ScopedRead.h"
 
 namespace OpenWifi {
 	void RESTAPI_configurations_list_handler::DoGet() {
+        if (ScopedReadList<ConfigurationDB>(DB_, *this, "configuration", "configurations")) return;
 		return ListHandler<ConfigurationDB>("configurations", DB_, *this);
 	}
 } // namespace OpenWifi

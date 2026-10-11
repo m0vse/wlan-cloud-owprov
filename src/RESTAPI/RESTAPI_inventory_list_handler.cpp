@@ -7,6 +7,7 @@
 //
 
 #include "RESTAPI_inventory_list_handler.h"
+#include "ScopedRead.h"
 #include "RESTAPI/RESTAPI_db_helpers.h"
 #include "StorageService.h"
 
@@ -34,6 +35,7 @@ namespace OpenWifi {
 	}
 
 	void RESTAPI_inventory_list_handler::DoGet() {
+        if (ScopedReadList<InventoryDB>(DB_, *this, "inventory", "taglist")) return;
 
 		if (GetBoolParameter("orderSpec")) {
 			return ReturnFieldList(DB_, *this);

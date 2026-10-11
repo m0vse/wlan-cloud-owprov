@@ -20,6 +20,11 @@
 
 #include "RESTObjects/RESTAPI_SecurityObjects.h"
 #include "framework/AuthClient.h"
+#include "framework/UserAccessClient.h"
+
+#ifndef OPENWIFI_ACCESS_SERVICE
+#define OPENWIFI_ACCESS_SERVICE ""
+#endif
 #include "framework/RESTAPI_GenericServerAccounting.h"
 #include "framework/RESTAPI_RateLimiter.h"
 #include "framework/RESTAPI_utils.h"
@@ -60,10 +65,29 @@ namespace OpenWifi {
 			  AlwaysAuthorize_(AlwaysAuthorize), Server_(Server), MyRates_(Profile),
 			  TransactionId_(TransactionId) {}
 
-		inline bool RoleIsAuthorized([[maybe_unused]] const std::string &Path,
-									 [[maybe_unused]] const std::string &Method,
+		virtual bool SupportsScopedCollection() const { return false; }
+        virtual bool RequiresAuthentication() const { return AlwaysAuthorize_; }
+		bool RestrictedAccess() const { return RestrictedAccess_; }
+		const SecurityObjects::UserInfo &AccessSubject() const { return UserInfo_.userinfo; }
+		inline bool RoleIsAuthorized(const std::string &Path, const std::string &Method,
 									 [[maybe_unused]] std::string &Reason) {
-			return true;
+			// Authentication has already validated the internal service key.
+			if (!RequiresAuthentication() || (Internal_ && Request->has("X-INTERNAL-NAME")) || SubOnlyService_)
+				return true;
+			if (UserInfo_.userinfo.id.empty()) return false;
+			if (UserInfo_.userinfo.userRole == SecurityObjects::ROOT) return true;
+			if (std::string(OPENWIFI_ACCESS_SERVICE) == "owsec" && !Internal_ &&
+				Poco::URI(Path).getPath() == "/api/v1/validateToken" && GetParameter("token") != SessionToken_)
+				return false;
+			RestrictedAccess_ = true;
+			UserAccess::Query query;
+			for (const auto &parameter : Parameters_) {
+				if (!query.emplace(parameter.first, parameter.second).second) return false;
+			}
+			const auto decision = UserAccess::Authorize(UserInfo_.userinfo, OPENWIFI_ACCESS_SERVICE,
+				Method, Poco::URI(Path).getPath(), query, SupportsScopedCollection());
+			SecretsAllowed_ = decision.secretsAllowed;
+			return decision.allowed;
 		}
 
 		inline void handleRequest(Poco::Net::HTTPServerRequest &RequestIn,
@@ -91,7 +115,7 @@ namespace OpenWifi {
 					return;
 
 				bool Expired = false, Contacted = false;
-				if (AlwaysAuthorize_ && !IsAuthorized(Expired, Contacted, SubOnlyService_)) {
+				if (RequiresAuthentication() && !IsAuthorized(Expired, Contacted, SubOnlyService_)) {
 					if (Expired)
 						return UnAuthorized(RESTAPI::Errors::EXPIRED_TOKEN);
 					if (Contacted)
@@ -100,12 +124,12 @@ namespace OpenWifi {
 						return UnAuthorized(RESTAPI::Errors::SECURITY_SERVICE_UNREACHABLE);
 				}
 
+				ParseParameters();
 				std::string Reason;
 				if (!RoleIsAuthorized(RequestIn.getURI(), Request->getMethod(), Reason)) {
 					return UnAuthorized(RESTAPI::Errors::ACCESS_DENIED);
 				}
 
-				ParseParameters();
 				if (Request->getMethod() == Poco::Net::HTTPRequest::HTTP_GET)
 					return DoGet();
 				else if (Request->getMethod() == Poco::Net::HTTPRequest::HTTP_POST)
@@ -553,6 +577,15 @@ namespace OpenWifi {
 		inline bool IsAuthorized(bool &Expired, bool &Contacted, bool SubOnly = false);
 
 		inline void ReturnObject(Poco::JSON::Object &Object) {
+			if (RestrictedAccess_) {
+                for (const auto &key : {"inUse", "children", "venues", "devices", "contacts", "locations",
+                        "managementRoles", "managementPolicies", "maps", "variables", "access"})
+                    if (Object.has(key)) Object.set(key, Poco::JSON::Array{});
+                for (const auto &key : {"managementPolicy", "managementRole"})
+                    if (Object.has(key)) Object.set(key, "");
+                UserAccess::FilterConfigurationReferences(UserInfo_.userinfo, Object);
+            }
+			if (RestrictedAccess_ && !SecretsAllowed_) UserAccess::RedactSecrets(Object);
 			PrepareResponse();
 			if (Request != nullptr) {
 				//   can we compress ???
@@ -605,6 +638,26 @@ namespace OpenWifi {
         }
 
         inline void ReturnRawJSON(const std::string &json_doc) {
+			if (RestrictedAccess_ && !SecretsAllowed_) {
+				try {
+					Poco::JSON::Parser parser;
+					auto value = parser.parse(json_doc);
+					if (value.type() == typeid(Poco::JSON::Object::Ptr)) {
+						auto object = value.extract<Poco::JSON::Object::Ptr>();
+						UserAccess::RedactSecrets(*object);
+						return ReturnObject(*object);
+					}
+					if (value.type() == typeid(Poco::JSON::Array::Ptr)) {
+						auto array = value.extract<Poco::JSON::Array::Ptr>();
+                        Poco::JSON::Object wrapper;
+                        wrapper.set("items", array);
+                        UserAccess::RedactSecrets(wrapper);
+						PrepareResponse();
+						array->stringify(Response->send());
+						return;
+					}
+				} catch (...) { return UnAuthorized(RESTAPI::Errors::ACCESS_DENIED); }
+			}
 			PrepareResponse();
 			if (Request != nullptr) {
 				//   can we compress ???
@@ -718,6 +771,8 @@ namespace OpenWifi {
 		const std::string &Requester() const { return REST_Requester_; }
 
 	  protected:
+		bool RestrictedAccess_ = false;
+		bool SecretsAllowed_ = false;
 		BindingMap Bindings_;
 		Poco::URI::QueryParameters Parameters_;
 		Poco::Logger &Logger_;

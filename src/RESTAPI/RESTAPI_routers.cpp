@@ -3,6 +3,7 @@
 //
 
 #include "RESTAPI/RESTAPI_asset_server.h"
+#include "RESTAPI/RESTAPI_access_check_handler.h"
 #include "RESTAPI/RESTAPI_configurations_handler.h"
 #include "RESTAPI/RESTAPI_configurations_list_handler.h"
 #include "RESTAPI/RESTAPI_contact_handler.h"
@@ -54,6 +55,7 @@ namespace OpenWifi {
 	RESTAPI_ExtRouter(const std::string &Path, RESTAPIHandler::BindingMap &Bindings,
 					  Poco::Logger &L, RESTAPI_GenericServerAccounting &S, uint64_t TransactionId) {
 		return RESTAPI_Router<
+			RESTAPI_access_check_handler,
 			RESTAPI_system_command, RESTAPI_system_configuration,
             RESTAPI_entity_handler, RESTAPI_entity_list_handler,
 			RESTAPI_contact_handler, RESTAPI_contact_list_handler, RESTAPI_location_handler,
@@ -80,6 +82,7 @@ namespace OpenWifi {
 	RESTAPI_IntRouter(const std::string &Path, RESTAPIHandler::BindingMap &Bindings,
 					  Poco::Logger &L, RESTAPI_GenericServerAccounting &S, uint64_t TransactionId) {
 		return RESTAPI_Router_I<
+			RESTAPI_access_check_handler,
 			RESTAPI_system_command, RESTAPI_system_configuration, RESTAPI_entity_handler,
             RESTAPI_entity_list_handler,
 			RESTAPI_contact_handler, RESTAPI_contact_list_handler, RESTAPI_location_handler,

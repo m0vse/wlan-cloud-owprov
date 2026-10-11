@@ -142,7 +142,7 @@ inline std::vector<std::string> Preset(std::string_view name) {
     if (name == "viewer") return viewer;
     if (name != "editor" && name != "operator") return {};
     auto result = viewer;
-    result.insert(result.end(), {"configuration.write", "resources.write"});
+    result.insert(result.end(), {"configuration.write"});
     if (name == "operator") result.insert(result.end(), {"configuration.push", "devices.reboot"});
     // Firmware upgrade, shell, secrets, enrollment, deletion and user management
     // are explicit opt-ins, never implied by the operator preset.

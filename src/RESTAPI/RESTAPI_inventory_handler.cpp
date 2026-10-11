@@ -72,6 +72,8 @@ namespace OpenWifi {
 			}
 			return ReturnObject(Answer);
 		} else if (GetBoolParameter("applyConfiguration", false)) {
+            if (RestrictedAccess() && UserInfo_.webtoken.access_token_.empty())
+                return UnAuthorized(RESTAPI::Errors::ACCESS_DENIED);
 			poco_debug(Logger(),
 					   fmt::format("{}: Retrieving configuration.", Existing.serialNumber));
 			auto Device =
