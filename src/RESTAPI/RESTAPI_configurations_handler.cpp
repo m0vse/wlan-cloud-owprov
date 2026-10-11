@@ -299,6 +299,8 @@ namespace OpenWifi {
 			DB_.GetRecord("id", UUID, D);
 			Poco::JSON::Object Answer;
 			D.to_json(Answer);
+            if (RestrictedAccess() && !UserAccess::Check(AccessSubject(), "configuration", UUID,
+                    "configuration.read").allowed) Answer.set("configuration", Poco::JSON::Array{});
 			return ReturnObject(Answer);
 		}
 		InternalError(RESTAPI::Errors::RecordNotUpdated);
