@@ -221,7 +221,8 @@ namespace OpenWifi {
 			return BadRequest(RESTAPI::Errors::NameMustBeSet);
 		}
 
-		if (NewObject.deviceType.empty() ||
+		// Inventory can be staged before a model is known; supplied models must remain valid.
+		if (!NewObject.deviceType.empty() &&
 			!DeviceTypeCache()->IsAcceptableDeviceType(NewObject.deviceType)) {
 			return BadRequest(RESTAPI::Errors::InvalidDeviceTypes);
 		}

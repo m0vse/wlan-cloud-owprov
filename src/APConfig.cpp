@@ -244,11 +244,30 @@ namespace OpenWifi {
 
 		try {
 			std::set<std::string> Sections;
+			std::string UnitHostname;
+			bool HostnameSelected=false;
 			for (const auto &i : Config_) {
 				Poco::JSON::Parser P;
 				auto O = P.parse(i.element.configuration).extract<Poco::JSON::Object::Ptr>();
 				auto Names = O->getNames();
 				for (const auto &SectionName : Names) {
+					// A hostname-only device Unit must not replace the venue's entire Unit.
+					if(SectionName=="unit" && O->isObject(SectionName)) {
+						auto Unit=O->getObject(SectionName);
+						if(Unit->size()==1 && Unit->has("hostname")) {
+							if(Explain_) {
+								Poco::JSON::Object Entry;Entry.set("from-name",i.info.name);Entry.set("from-uuid",i.info.id);
+								Entry.set("action",HostnameSelected?"ignored":"added");Entry.set("override","unit.hostname");
+								Entry.set("weight",i.element.weight);Explanation_.add(Entry);
+								}
+							if(!HostnameSelected) {
+								Poco::JSON::Object ExpandedUnit;ReplaceVariablesInObject(*Unit,ExpandedUnit);
+								UnitHostname=ExpandedUnit.getValue<std::string>("hostname");HostnameSelected=true;
+							}
+							continue;
+						}
+						if(!Sections.count("unit") && Unit->has("hostname"))HostnameSelected=true;
+					}
 					auto InsertInfo = Sections.insert(SectionName);
 					if (InsertInfo.second) {
 						if (O->isArray(SectionName)) {
@@ -295,6 +314,20 @@ namespace OpenWifi {
 				}
 			}
 
+			if(!UnitHostname.empty()) {
+				Poco::JSON::Object Unit;
+				if(Configuration->has("unit")) {
+					auto Existing=Configuration->get("unit");
+					// Expanded sections are stored as Object values, not always Object::Ptr.
+					if(Existing.type()==typeid(Poco::JSON::Object))Unit=Existing.extract<Poco::JSON::Object>();
+					else Unit=*Existing.extract<Poco::JSON::Object::Ptr>();
+				}
+				Unit.set("hostname",UnitHostname);Configuration->set("unit",Unit);
+				if(Explain_) {
+					Poco::JSON::Object Entry;Entry.set("from-name","device hostname");Entry.set("action","added");
+					Entry.set("override","unit.hostname");Entry.set("value",UnitHostname);Explanation_.add(Entry);
+				}
+			}
 			//  Apply overrides...
 			ProvObjects::ConfigurationOverrideList COL;
 			if (StorageService()->OverridesDB().GetRecord("serialNumber", SerialNumber_, COL)) {
