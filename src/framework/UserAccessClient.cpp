@@ -55,6 +55,10 @@ Decision Authorize(const SecurityObjects::UserInfo &user, const std::string &ser
     }
     const auto rule = Classify(service, method, path, query);
     if (!rule.known || (rule.collection && !scopedCollectionSupported)) return {};
+    if(service=="owprov"&&method=="GET"&&rule.kind=="location"&&!rule.collection&&query.count("venueId")) {
+        if(query.size()!=1)return {};
+        return CheckVenueLocationReference(user,rule.id,query.at("venueId"));
+    }
     if (rule.catalog && !rule.id.empty()) return {};
     if (rule.catalog) for (const auto &capability : rule.capabilities)
         if (capability == "configuration.push" || capability == "devices.reboot" ||

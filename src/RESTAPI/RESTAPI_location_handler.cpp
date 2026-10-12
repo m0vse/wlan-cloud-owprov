@@ -12,6 +12,7 @@
 #include "RESTObjects/RESTAPI_ProvObjects.h"
 #include "StorageService.h"
 #include "framework/utils.h"
+#include "UserAccess.h"
 
 namespace OpenWifi {
 
@@ -24,6 +25,18 @@ namespace OpenWifi {
 
 		std::string Arg;
 		Poco::JSON::Object Answer;
+        if(RestrictedAccess()&&!GetParameter("venueId").empty()) {
+            // Recheck the current venue reference against the record snapshot
+            // immediately before returning only location display information.
+            if(Existing.entity.empty()||!UserAccess::CheckVenueLocationReference(AccessSubject(),UUID,
+                    GetParameter("venueId"),Existing.entity).allowed)
+                return UnAuthorized(RESTAPI::Errors::ACCESS_DENIED);
+            Poco::JSON::Object stored;Existing.to_json(stored);
+            for(const auto &field:{"id","name","type","buildingName","addressLines","city",
+                                  "state","postal","country","geoCode"})
+                if(stored.has(field))Answer.set(field,stored.get(field));
+            return ReturnObject(Answer);
+        }
 		if (HasParameter("expandInUse", Arg) && Arg == "true") {
 			Storage::ExpandedListMap M;
 			std::vector<std::string> Errors;

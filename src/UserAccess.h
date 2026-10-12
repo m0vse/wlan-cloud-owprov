@@ -4,6 +4,7 @@
 #include "framework/UserAccessResolver.h"
 #include "framework/OpenAPIRequests.h"
 #include "framework/MicroServiceNames.h"
+#include "framework/UserAccessClient.h"
 
 namespace OpenWifi::UserAccess {
 struct CanonicalOwnershipStore {
@@ -83,5 +84,20 @@ inline Resource ResolveStoredObject(const std::string &kind,const std::string &i
         if(StorageService()->LocationDB().GetRecord("id",id,object))return ResolveStoredScope({"entity",object.entity});
     }
     return {};
+}
+inline Decision CheckVenueLocationReference(const SecurityObjects::UserInfo &actor,
+        const std::string &locationId,const std::string &venueId,const std::string &snapshotEntity={}) {
+    if(actor.id.empty()||actor.suspended||actor.blackListed||!ValidScope({"venue",venueId}))return {};
+    SecurityObjects::UserInfo current;
+    if(!ReadCurrentUser(actor.id,current))return {};
+    ProvObjects::Venue venue;ProvObjects::Location location;
+    if(!StorageService()->VenueDB().GetRecord("id",venueId,venue)||venue.location!=locationId||
+       !StorageService()->LocationDB().GetRecord("id",locationId,location)||location.entity.empty()||
+       (!snapshotEntity.empty()&&location.entity!=snapshotEntity))return {};
+    auto resource=ResolveStoredScope({"venue",venueId});
+    const auto owner=std::find_if(resource.ancestors.begin(),resource.ancestors.end(),
+                                [](const Scope &scope){return scope.type=="entity";});
+    if(owner==resource.ancestors.end()||owner->id!=location.entity)return {};
+    return {AllowsUser(current,resource,"devices.read"),AllowsUser(current,resource,"secrets.read")};
 }
 } // namespace OpenWifi::UserAccess
