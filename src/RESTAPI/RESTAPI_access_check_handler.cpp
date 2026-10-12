@@ -21,20 +21,8 @@ void RESTAPI_access_check_handler::DoPost() {
         return BadRequest(RESTAPI::Errors::InvalidJSONDocument);
     // Services forward the authenticated user's stable ID, not a policy or an
     // entity supplied by the browser. Retrieve current policy from owsec.
-    OpenAPIRequestGet request(uSERVICE_SECURITY, "/api/v1/user/" + userId, {}, 3000);
-    Poco::JSON::Object::Ptr response;
-    if (request.Do(response) != Poco::Net::HTTPServerResponse::HTTP_OK || !response ||
-        !response->has("userRole") || !response->has("suspended") || !response->has("blackListed") ||
-        !response->has("securityPolicy") || !response->get("userRole").isString() ||
-        !response->get("securityPolicy").isString() ||
-        response->get("suspended").type() != typeid(bool) ||
-        response->get("blackListed").type() != typeid(bool))
-        return UnAuthorized(RESTAPI::Errors::ACCESS_DENIED);
     SecurityObjects::UserInfo user;
-    user.userRole = SecurityObjects::UNKNOWN;
-    if (!user.from_json(response) || user.id != userId || user.userRole == SecurityObjects::UNKNOWN)
-        return UnAuthorized(RESTAPI::Errors::ACCESS_DENIED);
-    if (user.suspended || user.blackListed) return UnAuthorized(RESTAPI::Errors::ACCESS_DENIED);
+    if (!UserAccess::ReadCurrentUser(userId,user)) return UnAuthorized(RESTAPI::Errors::ACCESS_DENIED);
     UserAccess::Resource resource;
     if (ParsedBody_->has("listDevices") && ParsedBody_->get("listDevices").type() != typeid(bool))
         return BadRequest(RESTAPI::Errors::InvalidJSONDocument);
@@ -65,30 +53,7 @@ void RESTAPI_access_check_handler::DoPost() {
             return BadRequest(RESTAPI::Errors::InvalidJSONDocument);
         const auto kind = ParsedBody_->getValue<std::string>("objectType");
         const auto id = ParsedBody_->getValue<std::string>("objectId");
-        if (kind == "inventory") resource = UserAccess::ResolveStoredDevice(id);
-        else if (kind == "entity" || kind == "venue") resource = UserAccess::ResolveStoredScope({kind, id});
-        else if (kind == "configuration") {
-            ProvObjects::DeviceConfiguration object;
-            if (StorageService()->ConfigurationDB().GetRecord("id", id, object) && object.subscriber.empty())
-                resource = UserAccess::ResolveOwner(object.entity, object.venue);
-        } else if (kind == "variable") {
-            ProvObjects::VariableBlock object;
-            if (StorageService()->VariablesDB().GetRecord("id", id, object) &&
-                object.subscriber.empty() && object.inventory.empty())
-                resource = UserAccess::ResolveOwner(object.entity, object.venue);
-        } else if (kind == "map") {
-            ProvObjects::Map object;
-            if (StorageService()->MapDB().GetRecord("id", id, object))
-                resource = UserAccess::ResolveOwner(object.entity, object.venue);
-        } else if (kind == "contact") {
-            ProvObjects::Contact object;
-            if (StorageService()->ContactDB().GetRecord("id", id, object))
-                resource = UserAccess::ResolveStoredScope({"entity", object.entity});
-        } else if (kind == "location") {
-            ProvObjects::Location object;
-            if (StorageService()->LocationDB().GetRecord("id", id, object))
-                resource = UserAccess::ResolveStoredScope({"entity", object.entity});
-        }
+        resource=UserAccess::ResolveStoredObject(kind,id);
     } else if (ParsedBody_->has("serialNumber")) {
         if (ParsedBody_->has("scopeType") || ParsedBody_->has("scopeId") ||
             !ParsedBody_->get("serialNumber").isString())

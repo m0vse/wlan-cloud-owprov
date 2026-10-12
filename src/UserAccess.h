@@ -2,6 +2,8 @@
 #include "StorageService.h"
 #include "framework/UserAccessPolicyJSON.h"
 #include "framework/UserAccessResolver.h"
+#include "framework/OpenAPIRequests.h"
+#include "framework/MicroServiceNames.h"
 
 namespace OpenWifi::UserAccess {
 struct CanonicalOwnershipStore {
@@ -45,5 +47,41 @@ inline bool AllowsUser(const SecurityObjects::UserInfo &user, const Resource &re
     Policy policy;
     if (!Parse(user.securityPolicy, policy)) return false;
     return Allows(policy, resource, capability);
+}
+inline bool ReadCurrentUser(const std::string &id, SecurityObjects::UserInfo &user) {
+    if (!ValidScope({"entity",id})) return false;
+    OpenAPIRequestGet request(uSERVICE_SECURITY,"/api/v1/user/"+id,{},3000);
+    Poco::JSON::Object::Ptr response;
+    if (request.Do(response)!=Poco::Net::HTTPServerResponse::HTTP_OK || !response ||
+        !response->has("userRole") || !response->has("suspended") || !response->has("blackListed") ||
+        !response->has("securityPolicy") || !response->get("userRole").isString() ||
+        !response->get("securityPolicy").isString() ||
+        response->get("suspended").type()!=typeid(bool) || response->get("blackListed").type()!=typeid(bool)) return false;
+    user.userRole=SecurityObjects::UNKNOWN;
+    return user.from_json(response) && user.id==id && user.userRole!=SecurityObjects::UNKNOWN &&
+           !user.suspended && !user.blackListed;
+}
+inline Resource ResolveStoredObject(const std::string &kind,const std::string &id) {
+    if(kind=="inventory")return ResolveStoredDevice(id);
+    if(kind=="entity"||kind=="venue")return ResolveStoredScope({kind,id});
+    if(kind=="configuration") {
+        ProvObjects::DeviceConfiguration object;
+        if(StorageService()->ConfigurationDB().GetRecord("id",id,object)&&object.subscriber.empty())
+            return ResolveOwner(object.entity,object.venue);
+    } else if(kind=="variable") {
+        ProvObjects::VariableBlock object;
+        if(StorageService()->VariablesDB().GetRecord("id",id,object)&&object.subscriber.empty()&&object.inventory.empty())
+            return ResolveOwner(object.entity,object.venue);
+    } else if(kind=="map") {
+        ProvObjects::Map object;
+        if(StorageService()->MapDB().GetRecord("id",id,object))return ResolveOwner(object.entity,object.venue);
+    } else if(kind=="contact") {
+        ProvObjects::Contact object;
+        if(StorageService()->ContactDB().GetRecord("id",id,object))return ResolveStoredScope({"entity",object.entity});
+    } else if(kind=="location") {
+        ProvObjects::Location object;
+        if(StorageService()->LocationDB().GetRecord("id",id,object))return ResolveStoredScope({"entity",object.entity});
+    }
+    return {};
 }
 } // namespace OpenWifi::UserAccess

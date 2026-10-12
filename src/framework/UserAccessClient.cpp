@@ -4,21 +4,19 @@
 #include "framework/MicroServiceNames.h"
 #include "Poco/JSON/Array.h"
 #include <cctype>
+#include "UserAccess.h"
 
 namespace OpenWifi::UserAccess {
 Decision Check(const SecurityObjects::UserInfo &user, const std::string &kind,
                const std::string &id, const std::string &capability) {
     if (user.id.empty() || user.suspended || user.blackListed) return {};
     if (user.userRole == SecurityObjects::ROOT) return {true, true};
-    Poco::JSON::Object body;
-    body.set("userId", user.id); body.set("capability", capability);
-    body.set("objectType", kind); body.set("objectId", id);
-    OpenAPIRequestPost request(uSERVICE_PROVISIONING, "/api/v1/access/check", {}, body, 3000);
-    Poco::JSON::Object::Ptr response;
-    if (request.Do(response) != Poco::Net::HTTPServerResponse::HTTP_OK || !response ||
-        !response->has("allowed") || response->get("allowed").type() != typeid(bool) ||
-        !response->has("secretsAllowed") || response->get("secretsAllowed").type() != typeid(bool)) return {};
-    return {response->getValue<bool>("allowed"), response->optValue<bool>("secretsAllowed", false)};
+    // The service directory excludes this process's own bus ID. Provisioning
+    // must not dispatch canonical checks to itself through that directory.
+    SecurityObjects::UserInfo current;
+    if(!KnownCapability(capability)||!ReadCurrentUser(user.id,current))return {};
+    const auto resource=ResolveStoredObject(kind,id);
+    return {AllowsUser(current,resource,capability),AllowsUser(current,resource,"secrets.read")};
 }
 
 Decision Authorize(const SecurityObjects::UserInfo &user, const std::string &service,
