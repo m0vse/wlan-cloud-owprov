@@ -21,7 +21,8 @@ namespace OpenWifi::SDK::GW {
 		void PerformCommand(RESTAPIHandler *client, const std::string &Command,
 							const std::string &EndPoint, Poco::JSON::Object &CommandRequest);
 		bool Configure(RESTAPIHandler *client, const std::string &Mac,
-					   Poco::JSON::Object::Ptr &Configuration, Poco::JSON::Object::Ptr &Response);
+					   Poco::JSON::Object::Ptr &Configuration, Poco::JSON::Object::Ptr &Response,
+                       bool Reconnect=false);
 		bool Upgrade(RESTAPIHandler *client, const std::string &Mac, uint64_t When,
 					 const std::string &ImageName, std::string &status);
 

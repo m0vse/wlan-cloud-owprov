@@ -28,7 +28,7 @@ namespace OpenWifi {
 		}
 	}
 
-	[[maybe_unused]] static void ComputeAndPushConfig(const std::string &SerialNumber, const std::string &DeviceType, Poco::Logger &Logger) {
+	[[maybe_unused]] static void ComputeAndPushConfig(const std::string &SerialNumber, const std::string &DeviceType, Poco::Logger &Logger, bool Reconnect=false) {
 		/*
 		Generic Helper to compute a device's config and push it down to the device.
 		*/
@@ -44,7 +44,11 @@ namespace OpenWifi {
 				poco_debug(Logger,
 							fmt::format("{}: Pushing configuration.", SerialNumber));
 				if (SDK::GW::Device::Configure(nullptr, SerialNumber, Configuration,
-												Response)) {
+												Response, Reconnect)) {
+                    if (Response && Response->optValue<bool>("unchanged",false)) {
+                        poco_information(Logger,fmt::format("{}: Configuration unchanged; reconnect push skipped.",SerialNumber));
+                        return;
+                    }
 					Logger.debug(
 						fmt::format("{}: Configuration pushed.", SerialNumber));
 					poco_information(Logger,

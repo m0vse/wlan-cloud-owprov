@@ -3,6 +3,9 @@
 //
 
 #include "SDK_gw.h"
+#include "ConfigReplay.h"
+#include <limits>
+#include <algorithm>
 
 #include "framework/MicroServiceNames.h"
 #include "framework/OpenAPIRequests.h"
@@ -212,12 +215,35 @@ namespace OpenWifi::SDK::GW {
 		}
 
 		bool Configure(RESTAPIHandler *client, const std::string &SerialNumber,
-					   Poco::JSON::Object::Ptr &Configuration, Poco::JSON::Object::Ptr &Response) {
+					   Poco::JSON::Object::Ptr &Configuration, Poco::JSON::Object::Ptr &Response,
+                       bool Reconnect) {
 
 			Poco::JSON::Object Body;
 
 			Poco::JSON::Parser P;
 			uint64_t now = Utils::Now();
+
+            // Reconnect discovery only: explicit operator pushes keep their
+            // existing semantics and never gain an extra configuration read.
+            if (Reconnect && client==nullptr) {
+                try {
+                    OpenAPIRequestGet current(uSERVICE_GATEWAY,
+                        "/api/v1/device/"+SerialNumber, {{"completeInfo","true"}}, 10000);
+                    auto snapshot=Poco::makeShared<Poco::JSON::Object>();
+                    if (current.Do(snapshot)==Poco::Net::HTTPResponse::HTTP_OK && snapshot) {
+                        std::ostringstream proposed,observed;
+                        Configuration->stringify(proposed); snapshot->stringify(observed);
+                        auto decision=ConfigReplay::Evaluate(SerialNumber,proposed.str(),observed.str());
+                        if (decision.unchanged) {
+                            Response=Poco::makeShared<Poco::JSON::Object>();
+                            Response->set("unchanged",true); Response->set("UUID",decision.version);
+                            return true;
+                        }
+                        if (decision.version && decision.version<std::numeric_limits<uint64_t>::max())
+                            now=std::max(now,decision.version+1);
+                    }
+                } catch (...) { /* No proof: retain the normal apply/retry path. */ }
+            }
 
 			Configuration->set("uuid", now);
 			Body.set("serialNumber", SerialNumber);

@@ -111,7 +111,7 @@ namespace OpenWifi {
                             // Now that the entry has been created, we can try to push a config if
                             // the connection was a capabilities message.
                             if (isConnection){
-                                ComputeAndPushConfig(SerialNumber, Compatible, Logger());
+                                ComputeAndPushConfig(SerialNumber, Compatible, Logger(), true);
                             }
                         }
                     }
