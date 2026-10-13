@@ -5,8 +5,9 @@
 
 namespace OpenWifi::ConfigReplay {
 struct Decision { bool unchanged=false; std::uint64_t version=0; };
-// Only an online AP's own applied UUID proves that stored content is active.
-// Stored/queued configuration by itself is not evidence of a successful apply.
+// A matching cached UUID does not establish this-process boot acceptance.
+// Only explicit same-process socket reconnects may suppress unchanged replay.
+// First connections (including process restarts) need a distinct apply UUID.
 inline Decision Evaluate(const std::string& serial,const std::string& desired,
                          const std::string& snapshot) {
     try {
@@ -30,7 +31,10 @@ inline Decision Evaluate(const std::string& serial,const std::string& desired,
         auto version=current.at("uuid").get<std::uint64_t>();
         current.erase("uuid"); proposed.erase("uuid");
         if (current.empty() || proposed.empty()) return {};
-        return {current==proposed,version};
+        const bool socketReconnect=connection.contains("connectReason") &&
+            connection.at("connectReason").is_string() &&
+            connection.at("connectReason")=="socket";
+        return {socketReconnect && current==proposed,version};
     } catch (...) { return {}; }
 }
 }
