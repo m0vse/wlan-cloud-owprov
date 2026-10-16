@@ -22,7 +22,8 @@ void Unique(std::vector<std::string> &values) {
 }
 void Validate(Policy &p) {
     Require(p.emails.size()<=20 && p.phones.size()<=20,"at most 20 recipients per channel");
-    const std::regex email(R"(^[^\s@<>:,;]+@[^\s@<>:,;]+\.[^\s@<>:,;]+$)");
+    // Match the existing SEC delivery endpoint's mailbox validation exactly.
+    const std::regex email(R"(^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$)");
     const std::regex phone(R"(^\+[1-9][0-9]{6,14}$)");
     for (auto &v:p.emails) {
         Require(v.size()<=254 && std::all_of(v.begin(),v.end(),[](unsigned char c){return c>=33 && c<=126;}) && std::regex_match(v,email),"invalid email recipient");
@@ -38,12 +39,18 @@ void Validate(Policy &p) {
         Require(Type(r.type) && types.insert(r.type).second,"unknown or duplicate rule type");
         Require(r.delaySeconds>=0 && r.delaySeconds<=604800 && r.recoveryDelaySeconds>=0 && r.recoveryDelaySeconds<=604800,"delay outside bounds");
         Require(r.repeatSeconds==0 || (r.repeatSeconds>=60 && r.repeatSeconds<=604800),"repeat must be zero or 60..604800");
+        if(p.enabled && r.enabled) {
+            Require(r.email || r.sms,"enabled rule requires a delivery channel");
+            Require(!r.email || !p.emails.empty(),"email recipients required for enabled rule");
+            Require(!r.sms || !p.phones.empty(),"SMS recipients required for enabled rule");
+        }
     }
     Require(p.muteUntil>=0,"muteUntil must not be negative");
     Require(p.groupBy=="venue" || p.groupBy=="entity","groupBy must be venue or entity");
     Require(p.groupWindowSeconds>=0 && p.groupWindowSeconds<=3600,"group window must be 0..3600");
     const std::regex clock(R"(^([01][0-9]|2[0-3]):[0-5][0-9]$)");
     Require(std::regex_match(p.quietHours.start,clock) && std::regex_match(p.quietHours.end,clock),"invalid quiet hours time");
+    Require(!p.quietHours.enabled || p.quietHours.start!=p.quietHours.end,"quiet hours start and end must differ");
     const auto &z=p.quietHours.timezone;
     Require(!z.empty() && z.size()<=128 && z.front()!='/' && z.find("..") == std::string::npos &&
         std::all_of(z.begin(),z.end(),[](unsigned char c){return std::isalnum(c)||c=='/'||c=='_'||c=='-'||c=='+';}),"invalid timezone name");
