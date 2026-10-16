@@ -14,10 +14,12 @@
 #include "StorageService.h"
 
 #include "framework/CIDR.h"
+#include "VenueAlertService.h"
 
 namespace OpenWifi {
 
 	void RESTAPI_entity_handler::DoGet() {
+		if(GetBoolParameter("alerts")){HandleAlertSettings(*this,"entity",GetBinding("uuid",""),false);return;}
 		std::string UUID = GetBinding("uuid", "");
 		ProvObjects::Entity Existing;
 		if (UUID.empty() || !DB_.GetRecord("id", UUID, Existing)) {
@@ -127,6 +129,7 @@ namespace OpenWifi {
 	 */
 
 	void RESTAPI_entity_handler::DoPut() {
+		if(GetBoolParameter("alerts")){HandleAlertSettings(*this,"entity",GetBinding("uuid",""),true,ParsedBody_);return;}
 		std::string UUID = GetBinding("uuid", "");
 		ProvObjects::Entity Existing;
 		if (UUID.empty() || !DB_.GetRecord("id", UUID, Existing)) {

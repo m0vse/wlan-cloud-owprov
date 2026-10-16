@@ -133,6 +133,9 @@ add_executable(owprov
         src/Daemon.cpp src/Daemon.h
         src/Dashboard.h src/Dashboard.cpp
         src/StorageService.cpp src/StorageService.h
+        src/VenueAlertService.cpp src/VenueAlertService.h
+        src/VenueAlertPolicy.cpp src/VenueAlertPolicy.h
+        src/VenueAlertJSON.h src/VenueAlertQuietHours.h
 
         src/storage/storage_entity.cpp src/storage/storage_entity.h
         src/storage/storage_policies.cpp src/storage/storage_policies.h

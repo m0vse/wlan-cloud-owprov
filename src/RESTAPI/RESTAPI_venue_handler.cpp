@@ -18,6 +18,7 @@
 #include "framework/MicroServiceFuncs.h"
 
 #include "Kafka_ProvUpdater.h"
+#include "VenueAlertService.h"
 
 namespace OpenWifi {
 
@@ -52,6 +53,7 @@ namespace OpenWifi {
 	}
 
 	void RESTAPI_venue_handler::DoGet() {
+		if(GetBoolParameter("alerts")){HandleAlertSettings(*this,"venue",GetBinding("uuid",""),false);return;}
 		std::string UUID = GetBinding("uuid", "");
 		ProvObjects::Venue Existing;
 		if (UUID.empty() || !DB_.GetRecord("id", UUID, Existing)) {
@@ -266,6 +268,7 @@ namespace OpenWifi {
 	}
 
 	void RESTAPI_venue_handler::DoPut() {
+		if(GetBoolParameter("alerts")){HandleAlertSettings(*this,"venue",GetBinding("uuid",""),true,ParsedBody_);return;}
 		std::string UUID = GetBinding("uuid", "");
 
 		ProvObjects::Venue Existing;

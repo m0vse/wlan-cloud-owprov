@@ -29,6 +29,10 @@ inline RequestRule Classify(const std::string &service, const std::string &metho
     };
     const auto &name = parts[2];
     if (service == "owprov") {
+        if ((name=="entity"||name=="venue") && flag("alerts")) {
+            if(parts.size()!=4||query.size()!=1||(method!="GET"&&method!="PUT"))return rule;
+            return {true,false,false,name,parts[3],{method=="GET"?"devices.read":"resources.write"}};
+        }
         const std::map<std::string, std::string> kinds{{"entity", "entity"}, {"venue", "venue"},
             {"inventory", "inventory"}, {"configuration", "configuration"}, {"variable", "variable"},
             {"contact", "contact"}, {"location", "location"}, {"map", "map"}};

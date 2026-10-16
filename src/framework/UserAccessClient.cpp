@@ -41,11 +41,16 @@ Decision Authorize(const SecurityObjects::UserInfo &user, const std::string &ser
     }
     Policy policy;
     if (!Parse(user.securityPolicy, policy)) return {};
+    const auto rule = Classify(service, method, path, query);
+    const bool alertSettingsWrite=service=="owprov"&&method=="PUT"&&query.size()==1&&
+        query.count("alerts")&&query.at("alerts")=="true"&&rule.known&&!rule.collection&&
+        (rule.kind=="venue"||rule.kind=="entity")&&ValidScope({rule.kind,rule.id})&&
+        rule.capabilities==std::vector<std::string>{"resources.write"};
     // Only writes with a dedicated ownership/reference adapter are enabled.
     if (method != "GET" && !(service == "owprov" && method == "PUT" &&
             path.compare(0, 22, "/api/v1/configuration/") == 0) &&
         !(service == "owgw" && method == "POST" &&
-            path.compare(0, 15, "/api/v1/device/") == 0)) return {};
+            path.compare(0, 15, "/api/v1/device/") == 0)&&!alertSettingsWrite) return {};
     if (service == "owprov") {
         for (const auto &key : {"withExtendedInfo", "additionalInfo", "expandInUse", "computedAffected", "getDevices",
                                "getChildren", "explain", "resolveConfig"}) {
@@ -53,7 +58,6 @@ Decision Authorize(const SecurityObjects::UserInfo &user, const std::string &ser
             if (found != query.end() && found->second == "true") return {};
         }
     }
-    const auto rule = Classify(service, method, path, query);
     if (!rule.known || (rule.collection && !scopedCollectionSupported)) return {};
     if(service=="owprov"&&method=="GET"&&rule.kind=="location"&&!rule.collection&&query.count("venueId")) {
         if(query.size()!=1)return {};

@@ -17,6 +17,7 @@
 #include "FileDownloader.h"
 #include "FindCountry.h"
 #include "JobController.h"
+#include "VenueAlertService.h"
 #include "SerialNumberCache.h"
 #include "Signup.h"
 #include "StorageService.h"
@@ -42,7 +43,7 @@ namespace OpenWifi {
 												Signup(), FileDownloader(),
                                                 OpenRoaming_GlobalReach(),
                                                 OpenRoaming_Orion(), OpenRoaming_Radsec(),
-                                                OpenRoaming_GenericRadius()
+												OpenRoaming_GenericRadius(), VenueAlertsService()
             });
 		}
 		return instance_;
