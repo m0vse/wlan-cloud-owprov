@@ -74,14 +74,14 @@ std::vector<Delivery> Engine::Observe(const std::string &venue,const std::string
         if(r.lastAttempt>now) r.lastAttempt=now;
         if(r.lastAccepted>now) r.lastAccepted=now;
     }
-    if(observation==Observation::Unknown) {a.lastObservation=observation;a.lastObserved=now;return {};}
+    if(observation==Observation::Unknown) {a.elapsed=0;a.lastObservation=observation;a.lastObserved=now;return {};}
     if(observation!=a.phase) {
         a.phase=observation;a.elapsed=0;
         // In-flight jobs from the previous phase must never be accepted later.
         for(auto &[k,r]:a.recipients) {r.pendingId.clear();r.held=false;}
     } else if(a.lastObservation==observation && a.lastObserved>=0 && now>=a.lastObserved && now-a.lastObserved<=maxGap_) {
         a.elapsed=std::min<int64_t>(604800,a.elapsed+now-a.lastObserved);
-    }
+    } else a.elapsed=0;
     a.lastObservation=observation;a.lastObserved=now;
     std::vector<Delivery> deliveries;
     if(quietNow || now<policy.muteUntil) return deliveries;
@@ -109,13 +109,17 @@ bool Engine::Accept(const Delivery &d,int64_t now) {
     return true;
 }
 bool Engine::IsPending(const Delivery &d) const {
+    if(!HasReservation(d)) return false;
+    const auto &a=state_.alerts.at(d.key);
+    return a.lastObservation!=Observation::Unknown &&
+        a.phase==(d.recovery?Observation::Healthy:Observation::Fault);
+}
+bool Engine::HasReservation(const Delivery &d) const {
     const auto a=state_.alerts.find(d.key);if(a==state_.alerts.end()) return false;
     const auto r=a->second.recipients.find(RecipientKey(d.channel,d.recipient));
     return r!=a->second.recipients.end() && !d.id.empty() && r->second.pendingId==d.id &&
         !r->second.held && r->second.pendingRecovery==d.recovery &&
-        a->second.venue==d.venue && a->second.serial==d.serial && a->second.type==d.type &&
-        a->second.lastObservation!=Observation::Unknown &&
-        a->second.phase==(d.recovery?Observation::Healthy:Observation::Fault);
+        a->second.venue==d.venue && a->second.serial==d.serial && a->second.type==d.type;
 }
 bool Engine::Reject(const Delivery &d,int64_t now) {
     auto a=state_.alerts.find(d.key);if(a==state_.alerts.end()) return false;
@@ -134,7 +138,7 @@ void Engine::Restore(const Snapshot &snapshot) {
     // Restoring must never count daemon downtime as observed continuity.
     state_=snapshot;
     for(auto &[key,a]:state_.alerts) {
-        a.lastObservation=Observation::Unknown;a.lastObserved=-1;
+        a.lastObservation=Observation::Unknown;a.lastObserved=-1;a.elapsed=0;
         for(auto &[k,r]:a.recipients) {
             if(!r.pendingId.empty()) {r.held=true;r.pendingId.clear();}
         }
@@ -145,5 +149,11 @@ void Engine::RetainDevices(const std::map<std::string,std::string> &devices) {
         auto d=devices.find(it->second.serial);
         if(d==devices.end() || d->second!=it->second.venue) it=state_.alerts.erase(it); else ++it;
     }
+}
+void Engine::ForgetKeys(const std::vector<std::string> &keys) {
+    for(const auto &key:keys) state_.alerts.erase(key);
+}
+void Engine::SuspendObservations(int64_t now) {
+    for(auto &[key,a]:state_.alerts) {a.lastObservation=Observation::Unknown;a.lastObserved=now;a.elapsed=0;}
 }
 } // namespace OpenWifi::VenueAlerts

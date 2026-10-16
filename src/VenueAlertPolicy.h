@@ -64,10 +64,13 @@ public:
     bool Reject(const Delivery &delivery, int64_t now);
     bool Hold(const Delivery &delivery, int64_t now);
     bool IsPending(const Delivery &delivery) const;
+    bool HasReservation(const Delivery &delivery) const;
     Snapshot Save() const { return state_; }
     void Restore(const Snapshot &snapshot);
     // Call each collection pass with all current managed serial -> venue pairs.
     void RetainDevices(const std::map<std::string,std::string> &devices);
+    void ForgetKeys(const std::vector<std::string> &keys);
+    void SuspendObservations(int64_t now);
 private:
     Snapshot state_;
     int64_t maxGap_;
