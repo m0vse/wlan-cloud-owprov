@@ -21,8 +21,19 @@ int64_t AlertNow(){return std::time(nullptr);}
 std::string ScopeKey(const std::string &kind,const std::string &id){return kind+"/"+id;}
 std::pair<std::string,std::string> Owner(const std::string &value){return value.rfind("entity/",0)==0?std::make_pair(std::string("entity"),value.substr(7)):std::make_pair(std::string("venue"),value);}
 std::string OwnerKey(const ProvObjects::InventoryTag &d){return d.venue.empty()?ScopeKey("entity",d.entity):d.venue;}
+UserAccess::Resource AlertScope(const std::string &kind,const std::string &id){
+    // Root is a stored sentinel, never a tenant UUID/grant. Keep shared
+    // ValidScope strict; only the alert adapter recognizes this actual record.
+    if(kind=="entity"&&id==EntityDB::RootUUID()){
+        ProvObjects::Entity root;
+        if(StorageService()->EntityDB().GetRecord("id",id,root)&&root.info.id==id&&root.parent.empty())
+            return {UserAccess::PlatformRoot,{},true};
+        return {};
+    }
+    return UserAccess::ResolveStoredScope({kind,id});
+}
 std::vector<UserAccess::Scope> Lineage(const std::string &kind,const std::string &id){
-    auto r=UserAccess::ResolveStoredScope({kind,id});if(!r.ownershipResolved)return {};
+    auto r=AlertScope(kind,id);if(!r.ownershipResolved)return {};
     std::vector<UserAccess::Scope> chain{r.scope};chain.insert(chain.end(),r.ancestors.begin(),r.ancestors.end());
     if(!(chain.back()==UserAccess::PlatformRoot))chain.push_back(UserAccess::PlatformRoot);return chain;
 }
@@ -219,7 +230,7 @@ void VenueAlertService::Flush(int64_t now){
     queue_.erase(std::remove_if(queue_.begin(),queue_.end(),[&](auto &q){return finished.count(q.delivery.id)>0;}),queue_.end());Persist();
 }
 bool HandleAlertSettings(RESTAPIHandler &handler,const std::string &kind,const std::string &id,bool update,const Poco::JSON::Object::Ptr &body){
-    auto resource=UserAccess::ResolveStoredScope({kind,id});
+    auto resource=AlertScope(kind,id);
     if(!resource.ownershipResolved){handler.NotFound();return false;}
     SecurityObjects::UserInfo current;
     if(!UserAccess::ReadCurrentUser(handler.AccessSubject().id,current)||!UserAccess::AllowsUser(current,resource,update?"resources.write":"devices.read")){handler.UnAuthorized(RESTAPI::Errors::ACCESS_DENIED);return false;}
